@@ -23,7 +23,7 @@ foreach my $chr (@file){
 		my $chrIwant = $chrdetails[$ARGV[1]];
 		my @morechrsplit = split('\(', $chrIwant);
 		$Hashdetails{$morechrsplit[0]} = 0;
-  if($morechrsplit[0] == 10){print "\n$chr\n";die;}
+  if($morechrsplit[0] == $ARGV[2]){print "\n$chr\n";die;}
 	}
 }
 
