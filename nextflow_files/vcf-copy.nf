@@ -5,8 +5,8 @@ tophat = "/usr/local/bin/tophat"
 genome = "/home/modupeore17/.big_ten/chicken/chicken/chicken"
 
 
-params.fastq = "/home/modupeore17/COMPARISON/bamfiles/UL/*hits.bam"
 params.finalDir = "UL"
+params.fastq = "/home/modupeore17/COMPARISON/bamfiles/" + params.finalDir + "/*hits.bam"
 
 if (!params.fastq){
 	error 'No input reads specified. Please specify parameters "fastq" or "read1" and "read2"'
