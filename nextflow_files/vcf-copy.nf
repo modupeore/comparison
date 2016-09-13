@@ -38,6 +38,7 @@ process copy {
   shell:
     """
     cp -rf /home/modupeore17/modupeore17/CHICKENvariants/LIB*/library_${sample}/library*${sample}.vcf ${sample}-${params.finalDir}.vcf
+    cp -rf /home/modupeore17/modupeore17/CHICKENvariants/LIB*/library_${sample}/library*${sample}.vcf.idx ${sample}-${params.finalDir}.vcf.idx
 
     """
 }
