@@ -1,4 +1,5 @@
 #!/usr/bin/nextflow
+//NOTE: Running the job on GECO
 
 GFF = "/home/modupeore17/.big_ten/chicken/chicken.gff"
 tophat = "/usr/local/bin/tophat"

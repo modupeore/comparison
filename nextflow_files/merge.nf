@@ -1,4 +1,5 @@
 #!/usr/bin/nextflow
+//NOTE: create samtools sort and index
 
 GFF = "/home/modupeore17/.big_ten/chicken/chicken.gff"
 tophat = "/usr/local/bin/tophat"

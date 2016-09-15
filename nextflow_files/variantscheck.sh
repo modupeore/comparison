@@ -1,6 +1,6 @@
 #!/bin/bash
 # -N = job name
-
+#NOTE: Running the job on biomix
 echo start JOB_ID `date`
 echo "======================="
 
