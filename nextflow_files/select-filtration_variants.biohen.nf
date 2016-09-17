@@ -10,7 +10,7 @@ REF = params.homedir + "/.GENOMES/chicken/chicken.fa"
 GATKDIR = params.homedir + "/.software/GenomeAnalysisTK-3.3-0/GenomeAnalysisTK.jar"
 changes = params.homedir + "/workmodupe/RAVEN_scripts/standard/change_variants.pl"
 params.finalDir = "ICS"
-params.vfiles = "/work/amodupe/comparison/filesvcf/variants_files/" + params.finalDir + "/*vcf.gz"
+params.vfiles = "/work/amodupe/comparison/filesvcf/variants_files/" + params.finalDir + "/*vcf"
 
 demuxed = Channel.fromPath(params.vfiles)
 
@@ -19,35 +19,38 @@ groupedDemux = demuxed
                  .groupTuple( sort: true )
                  .map{ prefix, reads ->
                    tuple( prefix, reads[0] ) }
+groupedDemux.tap{group1}
+            .tap{group2}
 
 process changes {
   tag {prefix}
   publishDir "${params.finalDir}", mode: 'link'
   
   input:
-    set val(prefix), file (vcf) from groupedDemux
+    set val(prefix), file (vcf) from group1
 
   output:
     set val(prefix),file ("${prefix}-${params.finalDir}_PASS.vcf") into PassOut
 
   shell:
     """
-    gunzip ${vcf}
     $changes "${prefix}-${params.finalDir}.vcf" ./
     """
 }
 
-
+PassOut.tap{PassOut1}
+       .tap{PassOut2}
+       
 process select {
   tag { prefix }
   publishDir "${params.finalDir}", mode: 'link'
 
   input:
-    set val(prefix), file (vcf) from PassOut
+    set val(prefix), file (vcf) from PassOut1
 
   output:
-    set val(prefix),file ("${prefix}-raw_snp.vcf"), \
-	file ("${prefix}-raw_indel.vcf")  into selectOut
+    set val(prefix),file ("${prefix}-${params.finalDir}-raw_snp.vcf"), \
+	file ("${prefix}-${params.finalDir}-raw_indel.vcf")  into selectOut
 
   shell:
     """
@@ -56,19 +59,20 @@ process select {
 	-R ${REF} \
 	-V ${vcf} \
 	-selectType SNP \
-	-o ${prefix}-raw_snp.vcf
+	-o ${prefix}-${params.finalDir}-raw_snp.vcf
 
     java -jar $GATKDIR \
         -T SelectVariants \
         -R ${REF} \
         -V ${vcf} \
         -selectType INDEL \
-        -o ${prefix}-raw_indel.vcf
+        -o ${prefix}-${params.finalDir}-raw_indel.vcf
     """
 }
 
 selectOut.tap {selectOut1}
-	.tap {selectOut2}
+         .tap {selectOut2}
+         .tap {selectOut3}	
 
 process filter {
   tag {prefix}
@@ -79,7 +83,7 @@ process filter {
     set val(prefix), file (snp), file(indel) from selectOut1
 
   output:
-    file '*' into filterOut
+    file '*' into filterSNPOut
   
   shell:
     """
@@ -89,7 +93,7 @@ process filter {
 	-V ${snp} \
 	--filterExpression "QD < 2.0 || MQ < 40.0 || DP <5 || MQRankSum < -12.5 || FS > 60.0 || ReadPosRankSum < -8.0" \
 	--filterName "FAIL" \
-	-o ${prefix}-filtered_snp.vcf
+	-o ${prefix}-${params.finalDir}-filtered_snp.vcf
 
     java -jar $GATKDIR \
         -T VariantFiltration \
@@ -97,7 +101,7 @@ process filter {
         -V ${indel} \
         --filterExpression "QD < 2.0 || MQ < 40.0 || DP <5 || FS > 200.0 || ReadPosRankSum < -20.0" \
         --filterName "FAIL" \
-        -o ${prefix}-filtered_indel.vcf
+        -o ${prefix}-${params.finalDir}-filtered_indel.vcf
     """
 }
 
@@ -110,7 +114,7 @@ process filter_new {
     set val(prefix), file (snp), file(indel) from selectOut2
 
   output:
-    file '*' into filterOut2
+    file '*' into filterIndelOut
 
   shell:
     """
@@ -120,7 +124,7 @@ process filter_new {
         -V ${snp} \
         --filterExpression "QD < 2.0 || MQ < 40.0 || DP <5 || MQRankSum < -12.5 || FS > 30.0 || ReadPosRankSum < -8.0" \
         --filterName "FAIL" \
-        -o ${prefix}-filtered_snp30.vcf
+        -o ${prefix}-${params.finalDir}-filtered_snp30.vcf
 
     java -jar $GATKDIR \
         -T VariantFiltration \
@@ -128,12 +132,56 @@ process filter_new {
         -V ${indel} \
         --filterExpression "QD < 2.0 || MQ < 40.0 || DP <5 || FS > 60.0 || ReadPosRankSum < -20.0" \
         --filterName "FAIL" \
-        -o ${prefix}-filtered_indel60.vcf
+        -o ${prefix}-${params.finalDir}-filtered_indel60.vcf
     """
 }
+/*
+process stats {
+  tag {prefix}
+  publishDir "${params.finalDir}", mode: 'link'
+ 
+  input:
+    set val(prefix), file (vcf) from group2
+    file '*' from PassOut2
+    file '*' from selectOut3
+    file '*' from filterSNPOut
+    file '*' from filterIndelOut
 
 
+  output:
+    file '*' into output
 
+  shell:
+    """
+    #Total READS
+    echo "Total reads \t" > ${params.finalDir}-${prefix}.zzz
+    grep "^chr" ${prefix}-${params.finalDir}.vcf | wc -l >> ${params.finalDir}-${prefix}.zzz
+    
+    #NOT RANDOM
+    echo "Total not random \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "^chr" ${prefix}-${params.finalDir}_PASS.vcf | wc -l >> ${params.finalDir}-${prefix}.zzz
+    
+    #COUNT
+    echo "Total SNPS \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "^chr" "${prefix}-${params.finalDir}-raw_snp.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+    echo "Total INDEL \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "^chr" "${prefix}-${params.finalDir}-raw_indel.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+  
+    #COUNT
+    echo "Total SNPS filtered \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "PASS" "${prefix}-${params.finalDir}-filtered_snp.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+    echo "Total INDEL filtered \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "PASS" "${prefix}-${params.finalDir}-filtered_indel.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+ 
+    #COUNT
+    echo "Total SNPS filtered 30 \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "PASS" "${prefix}-${params.finalDir}-filtered_snp30.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+    echo "Total INDEL filtered 60 \t" >> ${params.finalDir}-${prefix}.zzz
+    grep "PASS" "${prefix}-${params.finalDir}-filtered_indel60.vcf" | wc -l >> ${params.finalDir}-${prefix}.zzz
+    
+    """ 
+}  
+ */   
 def middle(fileproc) {
   def procfile = fileproc.getFileName().toString()
   if(procfile =~ /merge-(.+)\..+/) {
